@@ -529,14 +529,18 @@ async function solidify() {
   solidifiedObjects.push(finalObj);
   (finalObj as any).userData = { isShape: isClosed };
 
-  // Show Metadata Modal
+  // Show Metadata Modal after a short delay so the user can see the shape first
   activeObjectForMetadata = finalObj;
   activePathForMetadata = [...currentPath];
   if (modal && modalNameInput && modalDescInput) {
-    modalNameInput.value = '';
-    modalDescInput.value = '';
-    modal.classList.add('active');
-    setTimeout(() => modalNameInput.focus(), 100);
+    setTimeout(() => {
+      if (modal && modalNameInput && modalDescInput) {
+        modalNameInput.value = '';
+        modalDescInput.value = '';
+        modal.classList.add('active');
+        setTimeout(() => modalNameInput.focus(), 100);
+      }
+    }, 3000);
   }
 
   currentLine = null;
@@ -571,6 +575,14 @@ modalSaveBtn?.addEventListener('click', async () => {
     if (error) console.error('Supabase Error:', error);
   }
 
+  activeObjectForMetadata = null;
+  activePathForMetadata = [];
+});
+
+document.getElementById('cancel-metadata')?.addEventListener('click', () => {
+  if (modal) {
+    modal.classList.remove('active');
+  }
   activeObjectForMetadata = null;
   activePathForMetadata = [];
 });
