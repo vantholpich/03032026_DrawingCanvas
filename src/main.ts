@@ -330,7 +330,9 @@ function onResults(results: Results) {
     smoothedPos.lerp(currentPos, LERP_FACTOR);
     cursor.position.copy(smoothedPos);
     cursor.visible = true;
-    emitSparkle(smoothedPos, isPointing ? 3 : 1);
+
+    // Discrete cursor sparkles: 2 when pointing, 0 when idle
+    emitSparkle(smoothedPos, isPointing ? 2 : 0);
 
     const isPinching = getDist(landmarks[8], landmarks[4]) < 0.08;
     const isOpen = indexExtended && middleDist > 0.12 && ringDist > 0.12;
@@ -417,10 +419,10 @@ async function solidify() {
 
   // Center the geometry for better grabbing/moving
   if (finalObj instanceof THREE.Mesh || finalObj instanceof Line2) {
-    finalObj.geometry.computeBoundingBox();
+    (finalObj as any).geometry.computeBoundingBox();
     const center = new THREE.Vector3();
-    finalObj.geometry.boundingBox!.getCenter(center);
-    finalObj.geometry.translate(-center.x, -center.y, -center.z);
+    (finalObj as any).geometry.boundingBox!.getCenter(center);
+    (finalObj as any).geometry.translate(-center.x, -center.y, -center.z);
     finalObj.position.copy(center);
   }
 
@@ -498,10 +500,10 @@ function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: num
 
   // Center geometry
   if (obj instanceof THREE.Mesh || obj instanceof Line2) {
-    obj.geometry.computeBoundingBox();
+    (obj as any).geometry.computeBoundingBox();
     const center = new THREE.Vector3();
-    obj.geometry.boundingBox!.getCenter(center);
-    obj.geometry.translate(-center.x, -center.y, -center.z);
+    (obj as any).geometry.boundingBox!.getCenter(center);
+    (obj as any).geometry.translate(-center.x, -center.y, -center.z);
   }
 
   obj.position.set(pos.x, pos.y, pos.z);
@@ -576,7 +578,7 @@ function animate() {
     } else if (obj instanceof Line2) {
       // Shimmer existing lines
       if (Math.random() > 0.96) {
-        const pos = obj.geometry.getAttribute('position');
+        const pos = (obj.geometry as any).getAttribute('position');
         if (pos && pos.count > 0) {
           const idx = Math.floor(Math.random() * pos.count);
           const p = new THREE.Vector3(pos.getX(idx), pos.getY(idx), pos.getZ(idx));
@@ -618,10 +620,10 @@ window.addEventListener('resize', () => {
   // Update Line Materials Resolution
   solidifiedObjects.forEach(obj => {
     if (obj instanceof Line2) {
-      (obj.material as LineMaterial).resolution.set(window.innerWidth, window.innerHeight);
+      (obj.material as any).resolution.set(window.innerWidth, window.innerHeight);
     }
   });
   if (currentLine) {
-    (currentLine.material as LineMaterial).resolution.set(window.innerWidth, window.innerHeight);
+    (currentLine.material as any).resolution.set(window.innerWidth, window.innerHeight);
   }
 });
