@@ -47,6 +47,18 @@ const mouseNDC = new THREE.Vector2();
 const drawingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Plane at Z=0
 const intersectionPoint = new THREE.Vector3();
 
+// --- UI Elements ---
+const modal = document.getElementById('metadata-modal');
+const modalNameInput = document.getElementById('shape-name') as HTMLInputElement;
+const modalDescInput = document.getElementById('shape-desc') as HTMLTextAreaElement;
+const modalSaveBtn = document.getElementById('save-metadata');
+const tooltip = document.getElementById('shape-tooltip');
+const tooltipName = document.getElementById('tooltip-name');
+const tooltipDesc = document.getElementById('tooltip-desc');
+
+let activeObjectForMetadata: THREE.Object3D | null = null;
+let activePathForMetadata: THREE.Vector3[] = [];
+
 // --- Particle System (Sparkles) ---
 class Sparkle {
   mesh: THREE.Mesh;
@@ -164,6 +176,20 @@ let grabOffset = new THREE.Vector3();
 const statusEl = document.getElementById('status');
 function setStatus(msg: string) { if (statusEl) statusEl.innerText = msg; }
 
+function updateTooltip(obj: THREE.Object3D | null, x: number, y: number) {
+  if (!tooltip || !tooltipName || !tooltipDesc) return;
+
+  if (obj && obj.userData && (obj.userData.name || obj.userData.description)) {
+    tooltipName.innerText = obj.userData.name || 'Untitled creation';
+    tooltipDesc.innerText = obj.userData.description || '';
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+    tooltip.classList.add('active');
+  } else {
+    tooltip.classList.remove('active');
+  }
+}
+
 function updateStatusDot(color: string) {
   const dot = document.getElementById('status-dot');
   if (dot) {
@@ -216,7 +242,6 @@ function updateDrawing(point: THREE.Vector3) {
   if (!isDrawing || !currentLine) return;
   if (currentPath.length === 0 || currentPath[currentPath.length - 1].distanceTo(point) > 0.02) {
     currentPath.push(point.clone());
-    const oldGeom = currentLine.geometry;
     const geometry = new LineGeometry();
     geometry.setPositions(currentPath.flatMap(p => [p.x, p.y, p.z]));
 
@@ -302,6 +327,24 @@ window.addEventListener('mousemove', (e) => {
   cursor.position.copy(smoothedPos);
   cursor.visible = true;
   emitSparkle(smoothedPos, isMouseDown ? 3 : 1);
+
+  // Tooltip Logic
+  if (!isMouseDown && !isDrawing && !grabbedObject) {
+    let closest: THREE.Object3D | null = null;
+    let minDist = 0.3;
+    solidifiedObjects.forEach(obj => {
+      const d = obj.position.distanceTo(smoothedPos);
+      if (d < minDist) {
+        minDist = d;
+        closest = obj;
+      }
+    });
+    updateTooltip(closest, e.clientX, e.clientY);
+  } else if (grabbedObject) {
+    updateTooltip(grabbedObject, e.clientX, e.clientY);
+  } else {
+    updateTooltip(null, 0, 0);
+  }
 
   if (isMouseDown) {
     updateDrawing(intersectionPoint);
@@ -467,7 +510,10 @@ async function solidify() {
     finalObj = new THREE.Mesh(geometry, material);
     scene.remove(currentLine); // Remove the temporary 2D line
   } else {
-    finalObj = currentLine;
+    // Only shapes should be saved on the canvas
+    scene.remove(currentLine);
+    currentLine = null;
+    return;
   }
 
   // Center the geometry for better grabbing/moving
@@ -483,27 +529,54 @@ async function solidify() {
   solidifiedObjects.push(finalObj);
   (finalObj as any).userData = { isShape: isClosed };
 
+  // Show Metadata Modal
+  activeObjectForMetadata = finalObj;
+  activePathForMetadata = [...currentPath];
+  if (modal && modalNameInput && modalDescInput) {
+    modalNameInput.value = '';
+    modalDescInput.value = '';
+    modal.classList.add('active');
+    setTimeout(() => modalNameInput.focus(), 100);
+  }
+
   currentLine = null;
+}
+
+modalSaveBtn?.addEventListener('click', async () => {
+  if (!activeObjectForMetadata || !modal) return;
+
+  const name = modalNameInput?.value || 'Untitled Creation';
+  const description = modalDescInput?.value || '';
+
+  activeObjectForMetadata.userData.name = name;
+  activeObjectForMetadata.userData.description = description;
+
+  modal.classList.remove('active');
 
   if (supabase) {
     const { data, error } = await supabase
       .from('drawings')
       .insert({
-        points: currentPath.map(p => ({ x: p.x, y: p.y, z: p.z })),
-        color: color,
-        position: { x: finalObj.position.x, y: finalObj.position.y, z: finalObj.position.z },
-        is_shape: isClosed
+        points: activePathForMetadata.map(p => ({ x: p.x, y: p.y, z: p.z })),
+        color: '#3b82f6',
+        position: { x: activeObjectForMetadata.position.x, y: activeObjectForMetadata.position.y, z: activeObjectForMetadata.position.z },
+        is_shape: activeObjectForMetadata.userData.isShape,
+        name: name,
+        description: description
       })
       .select('id')
       .single();
 
-    if (data) (finalObj as any).userData.id = data.id;
+    if (data) (activeObjectForMetadata as any).userData.id = data.id;
     if (error) console.error('Supabase Error:', error);
   }
-}
 
-function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: number, y: number, z: number }, id: string, isShape: boolean = false) {
-  if (points.length < 2) return;
+  activeObjectForMetadata = null;
+  activePathForMetadata = [];
+});
+
+function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: number, y: number, z: number }, id: string, isShape: boolean = false, draw?: any) {
+  if (points.length < 2 || !isShape) return;
 
   let obj: THREE.Object3D;
   const threeColor = new THREE.Color(color);
@@ -541,7 +614,7 @@ function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: num
 
     const material = new LineMaterial({
       color: threeColor,
-      linewidth: 0.03,
+      linewidth: 100,
       transparent: true,
       opacity: 0.9
     });
@@ -560,7 +633,7 @@ function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: num
   }
 
   obj.position.set(pos.x, pos.y, pos.z);
-  (obj as any).userData = { id, isShape };
+  (obj as any).userData = { id, isShape, name: (draw as any)?.name, description: (draw as any)?.description };
 
   scene.add(obj);
   solidifiedObjects.push(obj);
@@ -577,7 +650,7 @@ async function fetchDrawings() {
   if (data) {
     data.forEach(draw => {
       const points = draw.points.map((p: any) => new THREE.Vector3(p.x, p.y, p.z));
-      createSolidObject(points, draw.color || '#3b82f6', draw.position || { x: 0, y: 0, z: 0 }, draw.id, draw.is_shape);
+      createSolidObject(points, draw.color || '#3b82f6', draw.position || { x: 0, y: 0, z: 0 }, draw.id, draw.is_shape, draw);
     });
   }
 }
@@ -594,7 +667,7 @@ if (supabase) {
       (payload) => {
         const draw = payload.new as any;
         const points = draw.points.map((p: any) => new THREE.Vector3(p.x, p.y, p.z));
-        createSolidObject(points, draw.color || '#3b82f6', draw.position || { x: 0, y: 0, z: 0 }, draw.id, draw.is_shape);
+        createSolidObject(points, draw.color || '#3b82f6', draw.position || { x: 0, y: 0, z: 0 }, draw.id, draw.is_shape, draw);
       }
     )
     .on(
@@ -663,7 +736,7 @@ window.addEventListener('resize', () => {
   // Update Line Materials Resolution
   solidifiedObjects.forEach(obj => {
     if (obj instanceof Line2) {
-      (obj.material as any).resolution.set(window.innerWidth, window.innerHeight);
+      (obj as any).material.resolution.set(window.innerWidth, window.innerHeight);
     }
   });
   if (currentLine) {
