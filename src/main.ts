@@ -175,13 +175,13 @@ window.addEventListener('mousemove', (e) => {
   raycaster.setFromCamera(mouseNDC, camera);
   raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
 
+  // Update cursor position and visibility regardless of drawing state
+  smoothedPos.lerp(intersectionPoint, LERP_FACTOR);
+  cursor.position.copy(smoothedPos);
+  cursor.visible = true;
+
   if (isMouseDown) {
     updateDrawing(intersectionPoint);
-  } else {
-    // Hover cursor
-    smoothedPos.lerp(intersectionPoint, LERP_FACTOR);
-    cursor.position.copy(smoothedPos);
-    cursor.visible = true;
   }
 });
 
