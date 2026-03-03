@@ -3,6 +3,9 @@ import { Hands, type Results, HAND_CONNECTIONS } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { createClient } from '@supabase/supabase-js';
+import { Line2 } from 'three/examples/jsm/lines/Line2';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry';
 
 // --- Supabase Config ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -27,7 +30,7 @@ camera.position.z = 5;
 // --- State Management ---
 let isDrawing = false;
 let currentPath: THREE.Vector3[] = [];
-let currentLine: THREE.Line | null = null;
+let currentLine: Line2 | null = null;
 const solidifiedObjects: THREE.Object3D[] = [];
 const smoothedPos = new THREE.Vector3();
 const LERP_FACTOR = 0.4;
@@ -150,16 +153,22 @@ function startDrawing(point: THREE.Vector3) {
   if (isDrawing || grabbedObject) return;
   isDrawing = true;
   currentPath = [point.clone()];
-  setStatus('✨ Drawing...');
-  updateStatusDot('#3b82f6');
+  setStatus('✨ Drawing Magical Line...');
+  updateStatusDot('#ffffff');
 
-  const geometry = new THREE.BufferGeometry().setFromPoints(currentPath);
-  const material = new THREE.LineBasicMaterial({
-    color: 0x3b82f6,
-    linewidth: 10
+  const geometry = new LineGeometry();
+  geometry.setPositions(currentPath.flatMap(p => [p.x, p.y, p.z]));
+
+  const material = new LineMaterial({
+    color: 0xffffff,
+    linewidth: 10, // World units
+    transparent: true,
+    opacity: 0.9
   });
-  currentLine = new THREE.Line(geometry, material);
-  currentLine.frustumCulled = false;
+  material.resolution.set(window.innerWidth, window.innerHeight);
+
+  currentLine = new Line2(geometry, material);
+  currentLine.computeLineDistances();
   scene.add(currentLine);
 }
 
@@ -168,8 +177,15 @@ function updateDrawing(point: THREE.Vector3) {
   if (currentPath.length === 0 || currentPath[currentPath.length - 1].distanceTo(point) > 0.02) {
     currentPath.push(point.clone());
     const oldGeom = currentLine.geometry;
-    currentLine.geometry = new THREE.BufferGeometry().setFromPoints(currentPath);
-    oldGeom.dispose();
+    const geometry = new LineGeometry();
+    geometry.setPositions(currentPath.flatMap(p => [p.x, p.y, p.z]));
+
+    currentLine.geometry.dispose();
+    currentLine.geometry = geometry;
+    currentLine.computeLineDistances();
+
+    // Intense Sparkle Burst during drawing
+    emitSparkle(point, 12);
   }
 }
 
@@ -289,12 +305,6 @@ function onResults(results: Results) {
     raycaster.setFromCamera(mouseNDC, camera);
     raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
 
-    const currentPos = intersectionPoint.clone();
-    smoothedPos.lerp(currentPos, LERP_FACTOR);
-    cursor.position.copy(smoothedPos);
-    cursor.visible = true;
-    emitSparkle(smoothedPos, isPointing ? 3 : 1);
-
     const getDist = (l1: any, l2: any) => Math.sqrt(Math.pow(l1.x - l2.x, 2) + Math.pow(l1.y - l2.y, 2) + Math.pow(l1.z - l2.z, 2));
     const indexDist = getDist(landmarks[8], landmarks[5]);
     const middleDist = getDist(landmarks[12], landmarks[9]);
@@ -315,6 +325,13 @@ function onResults(results: Results) {
     if (gestureBuffer === 0) stablePointing = false;
 
     const isPointing = stablePointing;
+
+    const currentPos = intersectionPoint.clone();
+    smoothedPos.lerp(currentPos, LERP_FACTOR);
+    cursor.position.copy(smoothedPos);
+    cursor.visible = true;
+    emitSparkle(smoothedPos, isPointing ? 3 : 1);
+
     const isPinching = getDist(landmarks[8], landmarks[4]) < 0.08;
     const isOpen = indexExtended && middleDist > 0.12 && ringDist > 0.12;
 
@@ -399,7 +416,7 @@ async function solidify() {
   }
 
   // Center the geometry for better grabbing/moving
-  if (finalObj instanceof THREE.Mesh || finalObj instanceof THREE.Line) {
+  if (finalObj instanceof THREE.Mesh || finalObj instanceof Line2) {
     finalObj.geometry.computeBoundingBox();
     const center = new THREE.Vector3();
     finalObj.geometry.boundingBox!.getCenter(center);
@@ -464,16 +481,23 @@ function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: num
     });
     obj = new THREE.Mesh(geometry, material);
   } else {
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
+    const geometry = new LineGeometry();
+    geometry.setPositions(points.flatMap(p => [p.x, p.y, p.z]));
+
+    const material = new LineMaterial({
       color: threeColor,
-      linewidth: 10
+      linewidth: 0.03,
+      transparent: true,
+      opacity: 0.9
     });
-    obj = new THREE.Line(geometry, material);
+    material.resolution.set(window.innerWidth, window.innerHeight);
+
+    obj = new Line2(geometry, material);
+    (obj as Line2).computeLineDistances();
   }
 
   // Center geometry
-  if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+  if (obj instanceof THREE.Mesh || obj instanceof Line2) {
     obj.geometry.computeBoundingBox();
     const center = new THREE.Vector3();
     obj.geometry.boundingBox!.getCenter(center);
@@ -543,13 +567,33 @@ function animate() {
     }
   }
 
-  // Spin 3D Shapes
+  // Twinkle objects - Shimmering magic!
   solidifiedObjects.forEach(obj => {
     if ((obj as any).userData?.isShape) {
       obj.rotation.y += 0.01;
       obj.rotation.x += 0.004;
+      if (Math.random() > 0.98) emitSparkle(obj.position, 1);
+    } else if (obj instanceof Line2) {
+      // Shimmer existing lines
+      if (Math.random() > 0.96) {
+        const pos = obj.geometry.getAttribute('position');
+        if (pos && pos.count > 0) {
+          const idx = Math.floor(Math.random() * pos.count);
+          const p = new THREE.Vector3(pos.getX(idx), pos.getY(idx), pos.getZ(idx));
+          p.applyMatrix4(obj.matrixWorld);
+          emitSparkle(p, 1);
+        }
+      }
     }
   });
+
+  // Active Line Shimmer
+  if (isDrawing && currentLine && currentPath.length > 0) {
+    if (Math.random() > 0.6) {
+      const p = currentPath[Math.floor(Math.random() * currentPath.length)];
+      emitSparkle(p, 2);
+    }
+  }
 
   renderer.render(scene, camera);
 }
@@ -570,4 +614,14 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+
+  // Update Line Materials Resolution
+  solidifiedObjects.forEach(obj => {
+    if (obj instanceof Line2) {
+      (obj.material as LineMaterial).resolution.set(window.innerWidth, window.innerHeight);
+    }
+  });
+  if (currentLine) {
+    (currentLine.material as LineMaterial).resolution.set(window.innerWidth, window.innerHeight);
+  }
 });
