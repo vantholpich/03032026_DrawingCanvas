@@ -1,0 +1,103 @@
+/* Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+:root {
+  --primary: #3b82f6;
+  --bg: #0f172a;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: var(--bg);
+  color: white;
+  font-family: 'Inter', sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+
+#ui-overlay {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  z-index: 20;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  margin-right: 8px;
+  box-shadow: 0 0 10px #22c55e;
+}
+
+.debug-video,
+.debug-canvas {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  width: 280px;
+  height: auto;
+  aspect-ratio: 4/3;
+  border-radius: 12px;
+  transform: scaleX(-1);
+  z-index: 20;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.debug-video {
+  border: 2px solid var(--primary);
+  background: #1e293b;
+}
+
+.debug-canvas {
+  z-index: 21;
+  pointer-events: none;
+}
+
+.instructions-card {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.instruction-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.key-badge {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-right: 8px;
+  color: var(--primary);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}

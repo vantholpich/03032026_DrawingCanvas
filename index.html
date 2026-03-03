@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air Canvas | Draw with your Finger</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <div id="app">
+    <video class="debug-video" autoplay playsinline></video>
+    <canvas class="debug-canvas"></canvas>
+    <div id="ui-overlay">
+      <h1 style="margin:0; font-size: 1.8rem; font-weight: 700; color: #fff; letter-spacing: -0.025em;">
+        Air <span style="color: #3b82f6;">Canvas</span>
+      </h1>
+      <div style="display: flex; align-items: center; margin-top: 8px;">
+        <span class="status-indicator" id="status-dot"></span>
+        <span id="status" style="font-size: 0.9rem; font-weight: 500; opacity: 0.8;">Initializing...</span>
+      </div>
+
+      <div class="instructions-card">
+        <div class="instruction-item">
+          <span class="key-badge">DISNEY POINT</span> <span>to ✨ Draw a Star</span>
+        </div>
+        <div class="instruction-item">
+          <span class="key-badge">PINCH</span> <span>to ✊ Grab & Move</span>
+        </div>
+        <div class="instruction-item">
+          <span class="key-badge">OPEN HAND</span> <span>to Finish / Release</span>
+        </div>
+        <button id="clear-btn"
+          style="margin-top: 16px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; pointer-events: auto; font-family: inherit; font-size: 0.8rem;">Clear
+          Local Session</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
