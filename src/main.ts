@@ -251,6 +251,9 @@ function endDrawing() {
   isDrawing = false;
   setStatus('Ready');
   updateStatusDot('#22c55e');
+  // Remove glitter particles before solidifying into a shape
+  glitterParticles.forEach(gp => gp.dispose());
+  glitterParticles.length = 0;
   solidify();
 }
 
