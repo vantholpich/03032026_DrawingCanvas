@@ -102,6 +102,53 @@ function emitSparkle(pos: THREE.Vector3, count = 1) {
   }
 }
 
+// --- Static Glitter Particles (color-cycling, stay in place) ---
+const GLITTER_COLORS = [0xffd700, 0xffffff, 0xc0c0c0, 0x3b82f6, 0xff69b4, 0x00ffff];
+
+class GlitterParticle {
+  mesh: THREE.Mesh;
+  phase: number; // offset so particles don't all change at once
+
+  constructor(pos: THREE.Vector3) {
+    const size = 0.015 + Math.random() * 0.02;
+    const geometry = new THREE.SphereGeometry(size, 4, 4);
+    const color = GLITTER_COLORS[Math.floor(Math.random() * GLITTER_COLORS.length)];
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: color,
+      emissiveIntensity: 6,
+      transparent: true,
+      opacity: 0.9
+    });
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.position.copy(pos).add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.03,
+      (Math.random() - 0.5) * 0.03,
+      (Math.random() - 0.5) * 0.03
+    ));
+    this.phase = Math.random() * Math.PI * 2;
+    scene.add(this.mesh);
+  }
+
+  update(time: number) {
+    // Cycle color: pick a new glitter color periodically based on time + phase
+    const cycle = Math.floor((time * 3 + this.phase) % GLITTER_COLORS.length);
+    const mat = this.mesh.material as THREE.MeshStandardMaterial;
+    mat.emissive.setHex(GLITTER_COLORS[cycle]);
+    // Pulse intensity for extra sparkle
+    mat.emissiveIntensity = 4 + Math.sin(time * 10 + this.phase) * 3;
+    mat.opacity = 0.7 + Math.sin(time * 8 + this.phase) * 0.3;
+  }
+
+  dispose() {
+    scene.remove(this.mesh);
+    this.mesh.geometry.dispose();
+    (this.mesh.material as THREE.MeshStandardMaterial).dispose();
+  }
+}
+
+const glitterParticles: GlitterParticle[] = [];
+
 // Wand Tip Cursor
 const cursorGeometry = new THREE.SphereGeometry(0.04, 8, 8);
 const cursorMaterial = new THREE.MeshStandardMaterial({
@@ -161,9 +208,9 @@ function startDrawing(point: THREE.Vector3) {
 
   const material = new LineMaterial({
     color: 0xffffff,
-    linewidth: 10, // World units
+    linewidth: 0,
     transparent: true,
-    opacity: 0.9
+    opacity: 0.3 // Subtle core — glitter particles are the main visual
   });
   material.resolution.set(window.innerWidth, window.innerHeight);
 
@@ -184,8 +231,18 @@ function updateDrawing(point: THREE.Vector3) {
     currentLine.geometry = geometry;
     currentLine.computeLineDistances();
 
-    // Intense Sparkle Burst during drawing
-    emitSparkle(point, 12);
+    // Place static glitter particles along the new segment
+    const prev = currentPath[currentPath.length - 2];
+    const dist = prev.distanceTo(point);
+    const numParticles = Math.max(2, Math.floor(dist / 0.015)); // Dense placement
+    for (let i = 0; i < numParticles; i++) {
+      const t = i / numParticles;
+      const p = prev.clone().lerp(point, t);
+      glitterParticles.push(new GlitterParticle(p));
+    }
+
+    // Also emit a few floating sparkles from the tip
+    emitSparkle(point, 3);
   }
 }
 
@@ -569,33 +626,20 @@ function animate() {
     }
   }
 
-  // Twinkle objects - Shimmering magic!
+  // Update static glitter particles (color cycling)
+  const time = performance.now() / 1000;
+  for (const gp of glitterParticles) {
+    gp.update(time);
+  }
+
+  // Spin 3D shapes
   solidifiedObjects.forEach(obj => {
     if ((obj as any).userData?.isShape) {
       obj.rotation.y += 0.01;
       obj.rotation.x += 0.004;
       if (Math.random() > 0.98) emitSparkle(obj.position, 1);
-    } else if (obj instanceof Line2) {
-      // Shimmer existing lines
-      if (Math.random() > 0.96) {
-        const pos = (obj.geometry as any).getAttribute('position');
-        if (pos && pos.count > 0) {
-          const idx = Math.floor(Math.random() * pos.count);
-          const p = new THREE.Vector3(pos.getX(idx), pos.getY(idx), pos.getZ(idx));
-          p.applyMatrix4(obj.matrixWorld);
-          emitSparkle(p, 1);
-        }
-      }
     }
   });
-
-  // Active Line Shimmer
-  if (isDrawing && currentLine && currentPath.length > 0) {
-    if (Math.random() > 0.6) {
-      const p = currentPath[Math.floor(Math.random() * currentPath.length)];
-      emitSparkle(p, 2);
-    }
-  }
 
   renderer.render(scene, camera);
 }
@@ -605,6 +649,9 @@ animate();
 document.getElementById('clear-btn')?.addEventListener('click', () => {
   solidifiedObjects.forEach(obj => scene.remove(obj as any));
   solidifiedObjects.length = 0;
+  // Clean up glitter particles
+  glitterParticles.forEach(gp => gp.dispose());
+  glitterParticles.length = 0;
   if (currentLine) {
     scene.remove(currentLine);
     currentLine = null;
