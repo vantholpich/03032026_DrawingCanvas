@@ -102,21 +102,18 @@ function emitSparkle(pos: THREE.Vector3, count = 1) {
   }
 }
 
-// --- Static Glitter Particles (color-cycling, stay in place) ---
-const GLITTER_COLORS = [0xffd700, 0xffffff, 0xc0c0c0, 0x3b82f6, 0xff69b4, 0x00ffff];
-
+// --- Static Glitter Particles (pulse in place) ---
 class GlitterParticle {
   mesh: THREE.Mesh;
-  phase: number; // offset so particles don't all change at once
+  phase: number;
 
   constructor(pos: THREE.Vector3) {
     const size = 0.015 + Math.random() * 0.02;
     const geometry = new THREE.SphereGeometry(size, 4, 4);
-    const color = GLITTER_COLORS[Math.floor(Math.random() * GLITTER_COLORS.length)];
     const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      emissive: color,
-      emissiveIntensity: 6,
+      emissive: 0x3b82f6,
+      emissiveIntensity: 5,
       transparent: true,
       opacity: 0.9
     });
@@ -131,12 +128,8 @@ class GlitterParticle {
   }
 
   update(time: number) {
-    // Cycle color: pick a new glitter color periodically based on time + phase
-    const cycle = Math.floor((time * 3 + this.phase) % GLITTER_COLORS.length);
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
-    mat.emissive.setHex(GLITTER_COLORS[cycle]);
-    // Pulse intensity for extra sparkle
-    mat.emissiveIntensity = 4 + Math.sin(time * 10 + this.phase) * 3;
+    mat.emissiveIntensity = 3 + Math.sin(time * 10 + this.phase) * 3;
     mat.opacity = 0.7 + Math.sin(time * 8 + this.phase) * 0.3;
   }
 
