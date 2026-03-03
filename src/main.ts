@@ -12,6 +12,12 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
+if (!supabase) {
+  console.warn('⚠️ Supabase not configured. Drawings will not be saved or loaded.');
+} else {
+  console.log('✅ Supabase initialized successfully.');
+}
+
 // --- Three.js Setup ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -530,14 +536,21 @@ async function solidify() {
   (finalObj as any).userData = { isShape: isClosed };
 
   // Show Metadata Modal after a short delay so the user can see the shape first
-  activeObjectForMetadata = finalObj;
-  activePathForMetadata = [...currentPath];
+  const pendingObj = finalObj;
+  const pendingPath = [...currentPath];
+
   if (modal && modalNameInput && modalDescInput) {
+    console.log('⏳ Shape solidified! Starting 3s delay before labeling...');
     setTimeout(() => {
+      // If a modal is already active, we just overwrite the pending target for now
+      // A more robust solution would queue these, but let's keep it simple
       if (modal && modalNameInput && modalDescInput) {
+        activeObjectForMetadata = pendingObj;
+        activePathForMetadata = pendingPath;
         modalNameInput.value = '';
         modalDescInput.value = '';
         modal.classList.add('active');
+        console.log('✨ Labeling modal opened for shape:', pendingObj.uuid);
         setTimeout(() => modalNameInput.focus(), 100);
       }
     }, 3000);
@@ -547,7 +560,10 @@ async function solidify() {
 }
 
 modalSaveBtn?.addEventListener('click', async () => {
-  if (!activeObjectForMetadata || !modal) return;
+  if (!activeObjectForMetadata || !modal) {
+    console.warn('⚠️ No active object to save or modal missing.');
+    return;
+  }
 
   const name = modalNameInput?.value || 'Untitled Creation';
   const description = modalDescInput?.value || '';
@@ -556,23 +572,31 @@ modalSaveBtn?.addEventListener('click', async () => {
   activeObjectForMetadata.userData.description = description;
 
   modal.classList.remove('active');
+  console.log('💾 Saving to Supabase:', { name, description });
 
   if (supabase) {
+    const payload = {
+      points: activePathForMetadata.map(p => ({ x: p.x, y: p.y, z: p.z })),
+      color: '#3b82f6',
+      position: { x: activeObjectForMetadata.position.x, y: activeObjectForMetadata.position.y, z: activeObjectForMetadata.position.z },
+      is_shape: activeObjectForMetadata.userData.isShape,
+      name: name,
+      description: description
+    };
+
     const { data, error } = await supabase
       .from('drawings')
-      .insert({
-        points: activePathForMetadata.map(p => ({ x: p.x, y: p.y, z: p.z })),
-        color: '#3b82f6',
-        position: { x: activeObjectForMetadata.position.x, y: activeObjectForMetadata.position.y, z: activeObjectForMetadata.position.z },
-        is_shape: activeObjectForMetadata.userData.isShape,
-        name: name,
-        description: description
-      })
+      .insert(payload)
       .select('id')
       .single();
 
-    if (data) (activeObjectForMetadata as any).userData.id = data.id;
-    if (error) console.error('Supabase Error:', error);
+    if (error) {
+      console.error('❌ Supabase Error:', error.message, error.details);
+      alert('Save failed! Check if you added the name/description columns to your Supabase table.');
+    } else {
+      console.log('✅ Saved successfully! ID:', data?.id);
+      if (data) (activeObjectForMetadata as any).userData.id = data.id;
+    }
   }
 
   activeObjectForMetadata = null;
@@ -588,7 +612,14 @@ document.getElementById('cancel-metadata')?.addEventListener('click', () => {
 });
 
 function createSolidObject(points: THREE.Vector3[], color: string, pos: { x: number, y: number, z: number }, id: string, isShape: boolean = false, draw?: any) {
-  if (points.length < 2 || !isShape) return;
+  if (points.length < 2) return;
+
+  if (!isShape) {
+    console.log('ℹ️ Skipping non-shape object from DB:', id);
+    return;
+  }
+
+  console.log('🔨 Creating shape object from DB:', id, draw?.name);
 
   let obj: THREE.Object3D;
   const threeColor = new THREE.Color(color);
@@ -678,6 +709,14 @@ if (supabase) {
       { event: 'INSERT', schema: 'public', table: 'drawings' },
       (payload) => {
         const draw = payload.new as any;
+
+        // Prevent duplicate creation of our own shapes
+        const exists = solidifiedObjects.find(o => (o as any).userData?.id === draw.id);
+        if (exists) {
+          console.log('ℹ️ Shape already exists locally, skipping realtime creation:', draw.id);
+          return;
+        }
+
         const points = draw.points.map((p: any) => new THREE.Vector3(p.x, p.y, p.z));
         createSolidObject(points, draw.color || '#3b82f6', draw.position || { x: 0, y: 0, z: 0 }, draw.id, draw.is_shape, draw);
       }
