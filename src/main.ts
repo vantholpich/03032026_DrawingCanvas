@@ -44,19 +44,72 @@ const mouseNDC = new THREE.Vector2();
 const drawingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Plane at Z=0
 const intersectionPoint = new THREE.Vector3();
 
-// No sparkles as requested
+// --- Particle System (Sparkles) ---
+class Sparkle {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  life: number;
+  maxLife: number;
+
+  constructor(pos: THREE.Vector3) {
+    const geometry = new THREE.SphereGeometry(0.02 + Math.random() * 0.03, 4, 4);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0x3b82f6,
+      emissiveIntensity: 5,
+      transparent: true,
+      opacity: 1
+    });
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.position.copy(pos).add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.1,
+      (Math.random() - 0.5) * 0.1,
+      (Math.random() - 0.5) * 0.1
+    ));
+    this.velocity = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.02,
+      (Math.random() - 0.5) * 0.02,
+      (Math.random() - 0.5) * 0.02
+    );
+    this.maxLife = 30 + Math.random() * 20;
+    this.life = this.maxLife;
+    scene.add(this.mesh);
+  }
+
+  update() {
+    this.mesh.position.add(this.velocity);
+    this.life--;
+    const alpha = this.life / this.maxLife;
+    (this.mesh.material as THREE.MeshStandardMaterial).opacity = alpha;
+    this.mesh.scale.setScalar(alpha);
+    if (this.life <= 0) {
+      scene.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      (this.mesh.material as THREE.MeshStandardMaterial).dispose();
+      return false;
+    }
+    return true;
+  }
+}
+
+const sparkles: Sparkle[] = [];
+function emitSparkle(pos: THREE.Vector3, count = 1) {
+  for (let i = 0; i < count; i++) {
+    sparkles.push(new Sparkle(pos));
+  }
+}
 
 // Wand Tip Cursor
 const cursorGeometry = new THREE.SphereGeometry(0.04, 8, 8);
 const cursorMaterial = new THREE.MeshStandardMaterial({
   color: 0xffffff,
   emissive: 0xffffff,
-  emissiveIntensity: 10,
+  emissiveIntensity: 2,
   transparent: true,
-  opacity: 1
+  opacity: 0.8
 });
 const cursor = new THREE.Mesh(cursorGeometry, cursorMaterial);
-const cursorLight = new THREE.PointLight(0x3b82f6, 3, 5);
+const cursorLight = new THREE.PointLight(0x3b82f6, 2, 2);
 cursor.add(cursorLight);
 scene.add(cursor);
 
@@ -179,6 +232,7 @@ window.addEventListener('mousemove', (e) => {
   smoothedPos.lerp(intersectionPoint, LERP_FACTOR);
   cursor.position.copy(smoothedPos);
   cursor.visible = true;
+  emitSparkle(smoothedPos, isMouseDown ? 3 : 1);
 
   if (isMouseDown) {
     updateDrawing(intersectionPoint);
@@ -239,6 +293,7 @@ function onResults(results: Results) {
     smoothedPos.lerp(currentPos, LERP_FACTOR);
     cursor.position.copy(smoothedPos);
     cursor.visible = true;
+    emitSparkle(smoothedPos, isPointing ? 3 : 1);
 
     const getDist = (l1: any, l2: any) => Math.sqrt(Math.pow(l1.x - l2.x, 2) + Math.pow(l1.y - l2.y, 2) + Math.pow(l1.z - l2.z, 2));
     const indexDist = getDist(landmarks[8], landmarks[5]);
@@ -480,6 +535,13 @@ if (supabase) {
 // --- Render Loop ---
 function animate() {
   requestAnimationFrame(animate);
+
+  // Update Sparkles
+  for (let i = sparkles.length - 1; i >= 0; i--) {
+    if (!sparkles[i].update()) {
+      sparkles.splice(i, 1);
+    }
+  }
 
   // Spin 3D Shapes
   solidifiedObjects.forEach(obj => {
