@@ -129,8 +129,8 @@ class GlitterParticle {
 
   update(time: number) {
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
-    mat.emissiveIntensity = 3 + Math.sin(time * 10 + this.phase) * 3;
-    mat.opacity = 0.7 + Math.sin(time * 8 + this.phase) * 0.3;
+    mat.emissiveIntensity = 5 + Math.sin(time * 10 + this.phase) * 2;
+    mat.opacity = 0.85 + Math.sin(time * 8 + this.phase) * 0.15;
   }
 
   dispose() {
