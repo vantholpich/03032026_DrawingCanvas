@@ -9,11 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.183.2",
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/drawing_utils": "^0.3.1675466124",
     "@mediapipe/hands": "^0.4.1675469240",
-    "@supabase/supabase-js": "^2.98.0"
+    "@supabase/supabase-js": "^2.98.0",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@types/three": "^0.183.1",
